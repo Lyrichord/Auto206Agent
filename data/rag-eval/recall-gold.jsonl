@@ -1,0 +1,24 @@
+{"id":"mem-001","query":"刘瑞琪的导师是谁？","gold_source_substrings":["group/members.md"],"gold_answer":"刘瑞琪的导师为王晓老师（文档中为「王晓老师」列）。"}
+{"id":"mem-002","query":"课题组负责人王晓老师的邮箱是什么？","gold_source_substrings":["group/members.md"],"gold_answer":"xiao.wang@ahu.edu.cn"}
+{"id":"mem-003","query":"博士生席治远的研究方向和邮箱","gold_source_substrings":["group/members.md"],"gold_answer":"研究方向：强化学习；邮箱：wa24101010@stu.ahu.edu.cn"}
+{"id":"mem-004","query":"王远大老师的研究方向是什么？","gold_source_substrings":["group/members.md"],"gold_answer":"机器人与强化学习"}
+{"id":"disk-001","query":"磁盘使用率过高的告警名叫什么？触发条件怎么说？","gold_source_substrings":["disk_high_usage.md"],"gold_answer":"告警名 HighDiskUsage；持续5分钟超过阈值（文档写 >80% 警告、>90% 严重）。"}
+{"id":"disk-002","query":"前端206服务器监控里硬盘快满了要看快照里的哪个字段？","gold_source_substrings":["disk_high_usage.md"],"gold_answer":"diskRootPercent 表示根分区 / 已用比例；可有 diskRootPercentError。"}
+{"id":"disk-003","query":"根分区磁盘满了可以先用什么命令找最大的目录或文件？","gold_source_substrings":["disk_high_usage.md"],"gold_answer":"du -ah / | sort -rh | head -n 10 或 du -h --max-depth=1 / | sort -rh | head -n 10（文档紧急处理小节）。"}
+{"id":"lab-001","query":"实验室服务器监控快照 JSON 里 cpuPercent 和 load1 大概表示什么？","gold_source_substrings":["lab_server_snapshot_and_actions.md"],"gold_answer":"cpuPercent：CPU 非 idle 估算占用；load1：1 分钟平均负载。"}
+{"id":"lab-002","query":"用户问内存占用应该引用快照里的哪个字段？百分比错误看哪个字段？","gold_source_substrings":["lab_server_snapshot_and_actions.md"],"gold_answer":"memoryPercent；异常看 memoryPercentError。"}
+{"id":"lab-003","query":"queryPrometheusAlerts 和 getLabServerRuntimeSnapshot 回答「内存多少」时有什么区别？","gold_source_substrings":["lab_server_snapshot_and_actions.md"],"gold_answer":"前者是 Prometheus 告警列表；后者是单台主机此刻 CPU/内存/盘等快照，二者不可混用。"}
+{"id":"lab-004","query":"快照里想看磁盘问题除了 disk_high_usage 还要看哪个总览文档？","gold_source_substrings":["lab_server_snapshot_and_actions.md"],"gold_answer":"本文 lab_server_snapshot_and_actions.md 与 disk_high_usage.md 对照；总览在 lab_server_snapshot_and_actions。"}
+{"id":"cpu-001","query":"CPU 使用率过高告警名称和触发条件","gold_source_substrings":["cpu_high_usage.md"],"gold_answer":"告警名 HighCPUUsage；CPU 使用率持续5分钟超过80%。"}
+{"id":"cpu-002","query":"CPU 很高但负载不高可能说明什么？负载持续高于核数呢？","gold_source_substrings":["cpu_high_usage.md"],"gold_answer":"高 CPU 可能短时突发；负载持续高于 CPU 核数说明 Runnable 排队多。"}
+{"id":"mem-ops-001","query":"内存告警名叫什么？持续超过多少会触发？","gold_source_substrings":["memory_high_usage.md"],"gold_answer":"HighMemoryUsage；内存使用率持续5分钟超过85%。"}
+{"id":"mem-ops-002","query":"内存过高可能导致 OOM 之前文档里列了哪些后果？","gold_source_substrings":["memory_high_usage.md"],"gold_answer":"频繁 GC、OOM、应用崩溃或重启、swap 频繁性能下降等。"}
+{"id":"gpu-001","query":"getLabServerRuntimeSnapshot 能不能直接看到 GPU 利用率？应该怎么做？","gold_source_substrings":["gpu_high_usage.md"],"gold_answer":"快照不包含 DCGM/GPU 利用率；需登录后 nvidia-smi 或专用 GPU 监控。"}
+{"id":"gpu-002","query":"GPU 显存被僵尸进程占了怎么办的大致思路","gold_source_substrings":["gpu_high_usage.md"],"gold_answer":"nvidia-smi 看 PID/显存；协调用户释放；必要时管理员 kill 无人认领进程（遵守组内规章）。"}
+{"id":"proj-001","query":"江淮汽车校企项目面向无人物流行人轨迹预测是谁对接？校内牵头导师是谁？","gold_source_substrings":["group/projects.md"],"gold_answer":"对接学生：刘涛；校内牵头导师：王晓。"}
+{"id":"proj-002","query":"国家自然科学基金B类项目负责人是谁？","gold_source_substrings":["group/projects.md"],"gold_answer":"王晓"}
+{"id":"readme-001","query":"改了 group 目录下的成员 md 之后怎样才能让向量库更新？","gold_source_substrings":["group/README.md"],"gold_answer":"需重启应用或走全量重建索引流程（文档原文）。"}
+{"id":"readme-002","query":"全局知识库文档和会话上传的文件在检索范围上有什么区别？","gold_source_substrings":["group/README.md"],"gold_answer":"group 目录等为全局；上传文件绑定当前 session，同 sessionId 可继续引用。"}
+{"id":"svc-001","query":"服务不可用告警的告警名和错误率触发条件","gold_source_substrings":["service_unavailable.md"],"gold_answer":"ServiceUnavailable；健康检查失败或错误率超过50%。"}
+{"id":"slow-001","query":"服务响应时间过长的告警名和 P99 阈值条件","gold_source_substrings":["slow_response.md"],"gold_answer":"SlowResponse；P99 响应时间持续5分钟超过3秒。"}
+{"id":"pub-001","query":"方可同学在 ITSC2026 上的论文题目英文全称是什么？","gold_source_substrings":["group/publications.md"],"gold_answer":"SF-VLM: Socially-Aware VLM Framework for Right-of-Way-Compliant Autonomous Driving"}

@@ -1,0 +1,22 @@
+# 复制为项目根目录下的 application-local.yml（该文件已加入 .gitignore，不会提交到 GitHub）
+# 或在系统中设置同名环境变量，可覆盖下列配置。
+
+spring:
+  ai:
+    dashscope:
+      api-key: your-dashscope-api-key
+    mcp:
+      client:
+        sse:
+          connections:
+            tencent-cls:
+              sse-endpoint: /sse/your-tencent-cls-endpoint
+            amap-maps:
+              sse-endpoint: /your-modelscope-id/sse
+
+dashscope:
+  api:
+    key: your-dashscope-api-key
+
+research-feed:
+  github-token: ""

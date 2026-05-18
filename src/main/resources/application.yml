@@ -1,0 +1,179 @@
+# 对话记忆：服务重启后从该目录恢复会话（每会话一个 JSON 文件）
+app:
+  chat:
+    memory:
+      directory: ./data/chat-memory
+      # 写入系统提示「对话历史」的最近轮数（用户+助手为一对）；原默认 6，可按需加大
+      max-message-pairs: 20
+      # 摘要记忆（上下文压缩）：为 true 时，在每轮对话结束后若「原文轮数 > summary-recent-raw-pairs」且
+      # 超出部分 ≥ summary-compress-every-n-pairs，则将最旧 N 对并入 rollingSummary，模型侧仅带摘要 + 最近 K 对原文。
+      # 为 true 时每轮结束后按需调用摘要模型；K 须小于 max-message-pairs。
+      summary-compression-enabled: true
+      summary-recent-raw-pairs: 8
+      summary-compress-every-n-pairs: 6
+    # 轻量规则意图（写入系统提示；可对纯工具类问题跳过 RAG 预检索）
+    intent:
+      enabled: true
+      skip-prefetch-for-tool-first-intents: true
+  # 项目内 Skills：data/agent-skills 下根级 *.md（按文件名排序）合并进主对话系统提示；与 Milvus 知识库独立
+  skills:
+    enabled: true
+    directory: ./data/agent-skills
+    max-chars: 8000
+
+server:
+  port: 9900
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+file:
+  upload:
+    path: ./uploads
+    # 含旧版 Word .doc；与前端 accept 一致
+    allowed-extensions: txt,md,markdown,doc,docx,pdf
+
+# 魔搭 MCP 广场 Hosted（SSE）高德：见 spring.ai.mcp.client.sse.connections.amap-maps（JSON 中 url 已按 Spring AI 要求拆成 url + sse-endpoint）。
+
+# 知识库：RAG 仅检索已写入 Milvus 的文档。启动时会索引 indexed-directories；若 mirror-upload-to 留空，会自动再索引 file.upload.path（便于 Milvus 清空后恢复）。
+knowledge:
+  bootstrap-index-on-startup: true
+  indexed-directories:
+    - ./aiops-docs
+  # 上传成功后复制到该目录并向量化该路径（与仓库运维文档同级，避免 uploads 与 aiops-docs 双份向量）。留空 "" 则只使用 file.upload.path 并向量化该处文件。
+  mirror-upload-to: ./aiops-docs
+  # 带 sessionId 的上传：向量化副本目录（勿加入 indexed-directories）。若会话文件也镜像进 aiops-docs，启动全量索引会把同文件打成 global，导致跨会话泄漏。
+  session-rag-store-dir: ./data/rag-session-store
+  # 上传绑定会话：仅当前会话检索到该上传；全局运维文档仍为全会话可见。关闭则所有上传对全会话可见（旧行为）。
+  session-scoped-uploads: true
+  session-scoped-search: true
+
+milvus:
+  host: localhost
+  port: 19530
+  username: ""
+  password: ""
+  database: default
+  timeout: 10000
+
+# Spring AI Alibaba DashScope 配置（密钥勿写死在此文件，见 application-local.yml 或环境变量 DASHSCOPE_API_KEY）
+spring:
+  config:
+    import: optional:file:./application-local.yml
+  application:
+    name: Auto206Agent
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+  web:
+    resources:
+      cache:
+        period: 0s
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      chat:
+        options:
+          # 主对话模型（多模态识图请使用带 vl 的模型，如 qwen3-vl-plus）
+          model: qwen3-vl-plus
+          max-tokens: 4096
+          timeout: 180000  # 超时时间180秒（3分钟）
+      retry:
+        max-attempts: 3  # 最大重试次数
+        backoff:
+          initial-interval: 2000  # 初始重试间隔2秒
+          multiplier: 2  # 重试间隔倍数
+          max-interval: 10000  # 最大重试间隔10秒
+    
+    # Spring AI MCP 客户端配置
+    # 如果使用mock数据，请注释这部分内容
+    mcp:
+      client:
+        # 延迟连接 MCP，避免高德 Key 未配好或远端异常时阻塞整个 Spring 启动（make wait 一直超时）
+        initialized: false
+        enabled: true
+        name: tencent-mcp-server
+        version: 1.0.0
+        request-timeout: 60s
+        type: ASYNC
+        sse:
+          connections:
+            tencent-cls:
+              url: https://mcp-api.tencent-cloud.com
+              sse-endpoint: ${MCP_TENCENT_CLS_SSE_ENDPOINT:}
+            # 魔搭社区 MCP 市场 Hosted（SSE），与 Cursor 中 type=sse 的 url 对应关系：拆成 base + path
+            amap-maps:
+              url: https://mcp.api-inference.modelscope.net
+              sse-endpoint: ${MCP_AMAP_SSE_ENDPOINT:}
+
+# 阿里云 DashScope Embedding API 配置
+dashscope:
+  api:
+    key: ${DASHSCOPE_API_KEY:}
+  embedding:
+    model: text-embedding-v4  # 阿里云文本向量化模型
+
+# 文档分片配置
+document:
+  chunk:
+    max-size: 1200  # 每个分片最大字符数（略增大便于中文段落进同一分片；改后需重新向量化文档）
+    overlap: 100   # 分片之间的重叠字符数
+
+# RAG 配置
+rag:
+  top-k: 3  # 检索返回的最相似文档数量
+  # queryInternalDocs / 预检索返回 JSON 中每条 fragments[].body 的最大字符（避免工具输出过长被截断）
+  tool-fragment-max-chars: 24000
+  # 以下为 RagService（若启用独立 RAG 调用）预留；主对话模型见 spring.ai.dashscope.chat.options.model
+  model: "qwen3-max"
+  # 混合召回：向量 + Milvus 标量 like 关键词 + BM25 融合（再交给 rerank）。若 Milvus 不支持 like 子串，关键词分支会为空，退化为向量+BM25。
+  hybrid:
+    enabled: true
+    vector-branch-target: 64
+    lexical-limit-per-term: 14
+    max-lexical-terms: 8
+    min-term-length: 2
+    vector-weight: 0.55
+  # 召回后重排序（百炼 text-rerank）；关闭后仅按向量相似度排序
+  rerank:
+    enabled: true
+    model: qwen3-rerank
+    candidate-multiplier: 4
+    max-candidates: 48
+    max-chars-per-document: 8000
+    instruct: "Given a web search query, retrieve relevant passages that answer the query."
+    native-url: https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank
+    compatible-url: https://dashscope.aliyuncs.com/compatible-api/v1/reranks
+
+# Prometheus 配置
+# Spring 与 Prometheus 同机：可用 http://127.0.0.1:9090；在笔记本跑 Spring 时用 http://172.19.0.64:9090 或 SSH 隧道后写 http://127.0.0.1:9090
+prometheus:
+  base-url: http://127.0.0.1:9090
+  timeout: 30  # 超时时间（秒）；隧道/慢网可适当加大
+  mock-enabled: false  # true 时始终返回演示告警；false 且不可达时见 fallback-mock-on-error
+  fallback-mock-on-error: true  # 真实请求失败或 API 非 success 时仍返回演示告警 JSON，避免 AI Ops 无告警可分析
+
+# 206 组内服务器「一键监控」：前端按钮调用 /api/server-monitor/snapshot，通过 PromQL 即时查询。
+# 在 Prometheus → Status → Targets 看实际 labels.instance；若 scrape 为 127.0.0.1:9100，须配置 instance-regex 如下。
+server-monitor:
+  enabled: true
+  mock-enabled: false   # true 时不连 Prometheus，返回演示数据
+  target-host: 172.19.0.64   # 仅用于弹层展示主机名
+  # 与 Prometheus targets 里 labels.instance 一致。可写精确值 127.0.0.1:9100 或带通配的正则；勿依赖 \. 转义点（Prometheus 2.50+ 在 =~ 串内会判非法），代码会将 \. 转为精确匹配或 [.]
+  instance-regex: "127.0.0.1:9100"
+  refresh-seconds: 10   # 前端弹层自动刷新间隔；0 表示仅手动刷新
+  display-timezone: Asia/Shanghai   # 弹层「查询时间」墙钟；填 system 则用 JVM 默认时区
+
+# 最近一周「自动驾驶」相关：arXiv + GitHub Search（前端侧栏按钮）
+research-feed:
+  github-token: ""   # 可选 classic PAT，提高 GitHub API 限额；勿提交真实令牌
+  connect-timeout-ms: 15000
+  read-timeout-ms: 30000
+  session-ttl-ms: 1800000   # 30 分钟内可「再来10篇」复用同一会话池
+
+# CLS 云日志服务配置（当前 QueryLogsTools 真实 CLS 未实现；mock 为 false 时 queryLogs 恒失败，AI Ops 无日志证据）
+cls:
+  mock-enabled: true  # true 返回与告警关联的模拟日志；对接真实 CLS 后再改为 false
