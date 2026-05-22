@@ -83,7 +83,7 @@ public class ChatService {
     @Autowired(required = false)  // Mock 模式下才注册，所以设置为 optional,真实环境通过mcp配置注入
     private QueryLogsTools queryLogsTools;
 
-    @Autowired
+    @Autowired(required = false)
     private ToolCallbackProvider tools;
 
     @Autowired
@@ -357,18 +357,30 @@ public class ChatService {
     }
 
     /**
-     * 获取工具回调列表，mcp服务提供的工具
+     * 获取 MCP 提供的工具回调；连接失败时返回空数组，对话仍可使用本地 @Tool（RAG、天气、监控等）。
      */
     public ToolCallback[] getToolCallbacks() {
-        return tools.getToolCallbacks();
+        if (tools == null) {
+            return new ToolCallback[0];
+        }
+        try {
+            return tools.getToolCallbacks();
+        } catch (Exception e) {
+            logger.warn("MCP 工具列表获取失败（将仅使用本地工具，地图/腾讯云日志不可用）: {}", e.getMessage());
+            return new ToolCallback[0];
+        }
     }
 
     /**
-     * 记录可用工具列表：mcp服务提供的工具
+     * 记录可用工具列表：MCP + 本地 methodTools 由 ReactAgent 在运行时合并。
      */
     public void logAvailableTools() {
-        ToolCallback[] toolCallbacks = tools.getToolCallbacks();
-        logger.info("可用工具列表:");
+        ToolCallback[] toolCallbacks = getToolCallbacks();
+        if (toolCallbacks.length == 0) {
+            logger.info("MCP 工具未就绪（未配置或连接失败），对话依赖本地 @Tool");
+            return;
+        }
+        logger.info("MCP 可用工具列表:");
         for (ToolCallback toolCallback : toolCallbacks) {
             logger.info(">>> {}", toolCallback.getToolDefinition().name());
         }

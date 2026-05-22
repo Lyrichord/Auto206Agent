@@ -4,7 +4,7 @@
 
 ## 📖 项目简介
 
-Auto206Agent 面向课题组场景，在 RAG 与工具调用基础上支持组内文档与运维知识，主要能力包括：
+Auto206Agent(因我们课题组实验室房间号是206，故得名) 是一个面向课题组场景，在 RAG 与多种实用工具调用基础上支持组内文档与组内服务器运维监控和处理的Agent智能体，主要能力包括：
 
 ### 1. RAG 智能问答
 集成 Milvus 向量数据库和阿里云 DashScope，提供基于检索增强生成的智能问答能力，支持多轮对话和流式输出。
@@ -14,6 +14,8 @@ Auto206Agent 面向课题组场景，在 RAG 与工具调用基础上支持组�
 
 ### 3. 扩展能力（对话内自然语言触发）
 除知识库问答外，主对话 Agent 还可按需调用：**组内服务器实时指标**、**Prometheus 告警**、**天气（Open-Meteo）**、**路线/POI（高德 MCP）**、**腾讯云日志（CLS MCP）** 等工具；Web 侧栏另提供 **206 监控面板** 与 **自动驾驶文献聚合**。
+
+界面与典型用法见 **[功能演示与使用截图](#-功能演示与使用截图)**（含 9 张示意图）。
 
 ## 🚀 核心特性
 
@@ -27,9 +29,151 @@ Auto206Agent 面向课题组场景，在 RAG 与工具调用基础上支持组�
 - ✅ **会话管理**: JSON 持久化、历史列表、可选滚动摘要
 - ✅ **Web 界面**: Vue 风格静态页 + RESTful API
 
-## 📚 功能使用指南
+## 📸 功能演示与使用截图
 
-以下功能均可在 **Web 聊天框**（`http://localhost:9900`）用自然语言提问；Agent 会自动选择工具。请求体中的会话字段为 **`Id`**（与 `sessionId` / `id` 兼容），上传文件时建议传相同 `sessionId` 以保持「本会话私有文档」隔离。
+启动后访问 **http://localhost:9900**。截图位于仓库 [`docs/images/`](docs/images/)，GitHub 上可直接预览。
+
+| # | 功能 | 截图文件 |
+|---|------|----------|
+| 1 | 主界面展示 | [01-main-ui.png](docs/images/01-main-ui.png) |
+| 2 | 高德地图路线规划（MCP） | [02-amap-route-mcp.png](docs/images/02-amap-route-mcp.png) |
+| 3 | 日常对话 | [03-daily-chat.png](docs/images/03-daily-chat.png) |
+| 4 | 206 服务器运维一键监控 | [04-server-monitor.png](docs/images/04-server-monitor.png) |
+| 5 | 自然语言询问服务器情况与解决方案 | [05-server-nl-query.png](docs/images/05-server-nl-query.png) |
+| 6 | 新鲜论文与项目一键推送 | [06-research-feed.png](docs/images/06-research-feed.png) |
+| 7 | 上传文件（跨对话隔离）与多格式解析 | [07-upload-session-rag.png](docs/images/07-upload-session-rag.png) |
+| 8 | 多模态识别 | [08-multimodal.png](docs/images/08-multimodal.png) |
+| 9 | RAG 全局检索 | [09-rag-global.png](docs/images/09-rag-global.png) |
+
+---
+
+### 1. 主界面展示
+
+左侧：**新建对话**、**206 监控**、**自动驾驶文献**、近期对话列表；顶部：**206 监控**、**AI Ops**；中部为欢迎语与输入框（支持附图、上传文件、流式/快速模式）。
+
+![主界面](docs/images/01-main-ui.png)
+
+**使用**：`mvn spring-boot:run` 后浏览器打开 `http://localhost:9900` 即可。
+
+---
+
+### 2. 高德地图路线规划（MCP）
+
+通过魔搭 Hosted **高德 MCP**（`amap-maps`）查询坐标与地铁路线。需在 `application-local.yml` 配置 `spring.ai.mcp.client.sse.connections.amap-maps.sse-endpoint`。
+
+![高德路线规划](docs/images/02-amap-route-mcp.png)
+
+**示例提问**：「从安徽大学磬苑校区到之心城坐地铁怎么走？」「附近有什么餐厅？」
+
+**前置**：MCP 连接正常；未配置时对话仍可用，但路线类问题可能无法调工具。
+
+---
+
+### 3. 日常对话
+
+支持多轮上下文、流式输出、工具自动调用（时间、天气、检索、监控等）。可结合组内知识、联网检索能力回答研究类问题。
+
+![日常对话](docs/images/03-daily-chat.png)
+
+**使用**：在输入框直接提问；侧栏可切换历史会话。请求体字段 **`Id`** 为会话 ID，与上传时的 `sessionId` 保持一致。
+
+**API**：`POST /api/chat`（一次性）或 `POST /api/chat_stream`（SSE 推荐）。
+
+---
+
+### 4. 206 服务器运维一键监控
+
+侧栏或顶栏点击 **「206 监控」**，弹层展示 Prometheus 即时指标（CPU、内存、负载、磁盘、网络），默认每 10 秒刷新。
+
+![206 监控面板](docs/images/04-server-monitor.png)
+
+**前置**：
+
+1. 实验室机 `<LAB_SERVER_IP>` 上 Prometheus / node_exporter 已运行；
+2. 在 **Windows 本机** 保持 SSH 隧道（不要只在服务器里 ssh）：
+
+```powershell
+ssh -N -L 9090:127.0.0.1:9090 <SSH_USER>@<LAB_SERVER_IP>
+```
+
+3. `curl.exe http://127.0.0.1:9090/-/healthy` 返回 Healthy；
+4. `application.yml` 中 `server-monitor.instance-regex` 与 Prometheus Targets 里的 `instance` 一致（如 `<LAB_SERVER_IP>:9100`，以 Targets 页实际值为准）。
+
+**接口**：`GET /api/server-monitor/snapshot`
+
+---
+
+### 5. 自然语言询问服务器情况与解决方案
+
+在对话中询问「服务器现在怎么样」「磁盘快满了怎么办」，Agent 调用 **`getLabServerRuntimeSnapshot`** 并结合 `aiops-docs` 处置文档给出结论与命令建议。
+
+![自然语言服务器诊断](docs/images/05-server-nl-query.png)
+
+**示例提问**：「我们服务器现在情况如何，有什么要处理的？」
+
+**说明**：数值以 Prometheus 快照为准；清理步骤以 `disk_high_usage.md` 等文档为准。需与 [§4](#4-206-服务器运维一键监控) 相同的前置（隧道 + Prometheus）。
+
+---
+
+### 6. 新鲜论文与项目一键推送
+
+侧栏 **「自动驾驶文献」**：聚合最近 7 天 arXiv + GitHub 上与自动驾驶相关的论文与仓库，随机展示 10 条，支持 **「再来 10 篇」**。
+
+![文献推送](docs/images/06-research-feed.png)
+
+**操作**：点击「获取最近自动驾驶领域文章」→ `POST /api/research-feed/start`；「再来 10 篇」→ `POST /api/research-feed/more`（携带返回的 `sessionId`，30 分钟内有效）。
+
+**可选配置**：`research-feed.github-token` 提高 GitHub API 限额。
+
+---
+
+### 7. 上传文件（跨对话隔离记忆）与多格式解析
+
+输入框旁 **上传文件**（`txt / md / doc / docx / pdf`）。带当前会话 `sessionId` 时，材料**仅本会话**可检索；**新建对话**后需重新上传。
+
+![上传与会话隔离](docs/images/07-upload-session-rag.png)
+
+**流程**：上传成功提示 → 在同一对话中提问「请分析这份简历」→ Agent 通过 `queryInternalDocs` 检索本会话向量片段后作答。
+
+```bash
+curl -X POST http://localhost:9900/api/upload \
+  -F "file=@文档.pdf" \
+  -F "sessionId=你的会话Id"
+```
+
+全局组内文档（`aiops-docs/`）仍为**所有会话**可见，见 [§9](#9-rag-全局检索)。
+
+---
+
+### 8. 多模态识别
+
+点击输入框左侧 **图片** 按钮，可附图提问（模型需支持视觉，默认 `qwen3-vl-plus`）。识图结果写入当前轮对话，历史里显示为「附图×N」。
+
+![多模态识图](docs/images/08-multimodal.png)
+
+**示例**：上传照片后输入「分析一下这张图」。
+
+**说明**：图片随当次请求发送；持久化会话中不保存 Base64，仅保留文字摘要。
+
+---
+
+### 9. RAG 全局检索
+
+检索 `aiops-docs`（含 `group/members.md`、`publications.md`、`projects.md` 等）及运维文档，回答导师、成员、论文、项目、处置方案等**组内公开知识**。
+
+![RAG 全局检索](docs/images/09-rag-global.png)
+
+**示例提问**：「我们组的导师是谁？」「方可有什么论文？」
+
+**知识入库**：启动时 `knowledge.bootstrap-index-on-startup` 索引 `./aiops-docs`；亦可 `make upload` 或 `POST /api/upload`（无 sessionId 时写入全局库）。
+
+**与会话上传区别**：全局 RAG 不限会话；会话上传见 [§7](#7-上传文件跨对话隔离记忆与多格式解析)。
+
+---
+
+## 📚 功能使用指南（配置与 API 细则）
+
+以下功能均可在 **Web 聊天框**（`http://localhost:9900`）用自然语言提问；Agent 会自动选择工具。请求体中的会话字段为 **`Id`**（与 `sessionId` / `id` 兼容），上传文件时建议传相同 `sessionId` 以保持「本会话私有文档」隔离。界面操作见上文 [功能演示与使用截图](#-功能演示与使用截图)。
 
 ### 组内知识库（成员 / 论文 / 项目 / 运维文档）
 
@@ -372,18 +516,27 @@ rag:
 
 ```yaml
 prometheus:
-  base-url: http://127.0.0.1:9090   # 远程监控可改为 http://172.19.0.64:9090
+  # 本机经 SSH 隧道：http://127.0.0.1:9090；同网直连实验室机：http://<LAB_SERVER_IP>:9090
+  base-url: http://127.0.0.1:9090
   mock-enabled: false
   fallback-mock-on-error: true
 
 server-monitor:
   enabled: true
   mock-enabled: false          # true 时不连 Prometheus，返回演示数据
-  target-host: 172.19.0.64     # 面板展示用主机名
-  instance-regex: "127.0.0.1:9100"
+  target-host: <LAB_SERVER_IP>  # 面板展示用主机名
+  instance-regex: "<NODE_EXPORTER_INSTANCE>"   # 如 <LAB_SERVER_IP>:9100，与 Prometheus Targets 一致
   refresh-seconds: 10
   display-timezone: Asia/Shanghai
 ```
+
+**占位符说明**（请替换为你实验室实际值，勿将真实内网 IP 提交到公开仓库）：
+
+| 占位符 | 含义 |
+|--------|------|
+| `<LAB_SERVER_IP>` | 组内 Linux 监控机 IP（Prometheus / node_exporter 所在主机） |
+| `<SSH_USER>` | 该机 SSH 登录用户名 |
+| `<NODE_EXPORTER_INSTANCE>` | Prometheus Targets 中的 `instance` 标签，常见为 `<LAB_SERVER_IP>:9100` |
 
 ### AIOps / 日志相关
 
@@ -428,7 +581,7 @@ make init   # 启动 Milvus → 启动服务 → 上传 aiops-docs 到向量库
 http://localhost:9900
 ```
 
-侧栏：**新建对话**、**206 监控**、**自动驾驶文献**；顶部：**AI Ops**；输入框旁：**上传文件**、**图片识图**。
+侧栏：**新建对话**、**206 监控**、**自动驾驶文献**；顶部：**AI Ops**；输入框旁：**上传文件**、**图片识图**。各功能截图见 [docs/images/](docs/images/)。
 
 **命令行**
 

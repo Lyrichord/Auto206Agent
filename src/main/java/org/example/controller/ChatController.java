@@ -21,7 +21,6 @@ import org.example.util.ChatImageCodec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -58,9 +57,6 @@ public class ChatController {
 
     @Autowired
     private ChatMemoryProperties chatMemoryProperties;
-
-    @Autowired
-    private ToolCallbackProvider tools;
 
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -394,7 +390,7 @@ public class ChatController {
                 DashScopeApi dashScopeApi = chatService.createDashScopeApi();
                 DashScopeChatModel chatModel = chatService.createChatModel(dashScopeApi, 0.3, 8000, 0.9);
 
-                ToolCallback[] toolCallbacks = tools.getToolCallbacks();
+                ToolCallback[] toolCallbacks = chatService.getToolCallbacks();
 
                 emitter.send(SseEmitter.event().name("message").data(SseMessage.content("正在读取告警并拆解任务...\n")));
                 
