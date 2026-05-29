@@ -10,8 +10,10 @@ import org.example.config.SkillProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
+@EnableScheduling
 @EnableConfigurationProperties({ChatMemoryProperties.class, ChatIntentProperties.class, KnowledgeProperties.class,
         RagRerankProperties.class, HybridRetrievalProperties.class, ResearchFeedProperties.class, SkillProperties.class})
 public class Main {

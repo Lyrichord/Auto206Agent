@@ -22,6 +22,9 @@
         <spring-ai.version>1.1.0</spring-ai.version>
         <spring-ai-alibaba.version>1.1.0.0-RC2</spring-ai-alibaba.version>
         <spring-ai-alibaba-extensions.version>1.1.0.0-RC2</spring-ai-alibaba-extensions.version>
+        <!-- 覆盖 Spring Boot BOM 的 4.14.1，与 selenium-java 一致，避免 Guava 方法缺失 -->
+        <selenium.version>4.27.0</selenium.version>
+        <auto206.base.url>http://localhost:9900</auto206.base.url>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -65,6 +68,12 @@
                 <groupId>com.fasterxml.jackson.datatype</groupId>
                 <artifactId>jackson-datatype-jsr310</artifactId>
                 <version>2.17.0</version>
+            </dependency>
+            <!-- Milvus/grpc 默认拉 guava-android，会导致 Selenium 4.x NoSuchMethodError -->
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.3.1-jre</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -174,6 +183,25 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-client-webflux</artifactId>
         </dependency>
+
+        <!-- Selenium 前端 UI 测试（test 作用域；需先启动应用在 localhost:9900） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.seleniumhq.selenium</groupId>
+            <artifactId>selenium-java</artifactId>
+            <version>4.27.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.bonigarcia</groupId>
+            <artifactId>webdrivermanager</artifactId>
+            <version>5.9.2</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
 
@@ -188,6 +216,15 @@
             </plugin>
             
             <!-- Maven 编译器插件，配置 Lombok 注解处理器 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <systemPropertyVariables>
+                        <auto206.base.url>${auto206.base.url}</auto206.base.url>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>

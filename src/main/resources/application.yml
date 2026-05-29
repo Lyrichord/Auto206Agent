@@ -166,6 +166,16 @@ server-monitor:
   instance-regex: "127.0.0.1:9100"
   refresh-seconds: 10   # 前端弹层自动刷新间隔；0 表示仅手动刷新
   display-timezone: Asia/Shanghai   # 弹层「查询时间」墙钟；填 system 则用 JVM 默认时区
+  # 飞书磁盘告警：Webhook 等敏感项写在项目根 application-local.yml（见 spring.config.import）
+  feishu-alert:
+    enabled: false
+    webhook-url: ""
+    sign-secret: ""
+    disk-threshold-percent: 90
+    check-interval-seconds: 300   # 巡检间隔（秒），最短 60
+    cooldown-hours: 24            # 告警成功后 N 小时内不再推送
+    state-file: ./data/alert-state/feishu-disk-alert.json
+    skip-mock-snapshot: true
 
 # 最近一周「自动驾驶」相关：arXiv + GitHub Search（前端侧栏按钮）
 research-feed:

@@ -13,15 +13,16 @@ Auto206Agent(因我们课题组实验室房间号是206，故得名) 是一个�
 基于 AI Agent 的自动化运维系统，采用 **Planner → Executor → Replanner** 多 Agent 协作，实现告警分析、日志查询、智能诊断和《告警分析报告》生成。
 
 ### 3. 扩展能力（对话内自然语言触发）
-除知识库问答外，主对话 Agent 还可按需调用：**组内服务器实时指标**、**Prometheus 告警**、**天气（Open-Meteo）**、**路线/POI（高德 MCP）**、**腾讯云日志（CLS MCP）** 等工具；Web 侧栏另提供 **206 监控面板** 与 **自动驾驶文献聚合**。
+除知识库问答外，主对话 Agent 还可按需调用：**组内服务器实时指标**、**Prometheus 告警**、**天气（Open-Meteo）**、**路线/POI（高德 MCP）**、**腾讯云日志（CLS MCP）** 等工具；Web 侧栏另提供 **206 监控面板**、**飞书磁盘告警推送** 与 **自动驾驶文献聚合**。
 
-界面与典型用法见 **[功能演示与使用截图](#-功能演示与使用截图)**（含 9 张示意图）。
+界面与典型用法见 **[功能演示与使用截图](#-功能演示与使用截图)**（含 14 张示意图）。
 
 ## 🚀 核心特性
 
 - ✅ **RAG 问答**: 混合检索 + Rerank + 多轮对话 + SSE 流式输出
 - ✅ **组内知识库**: `aiops-docs`（成员、论文、项目、运维处置）+ 会话内上传隔离
 - ✅ **206 服务器监控**: Prometheus 即时快照（CPU/内存/负载/磁盘/网络）
+- ✅ **飞书告警推送**: 根分区磁盘 ≥ 阈值自动推送到飞书群/手机（24h 冷却，Webhook 配在本地配置）
 - ✅ **AIOps 运维**: 多 Agent 协作 + 告警/日志/文档联动 + 自动报告
 - ✅ **天气查询**: Open-Meteo（免 Key，工具 `getCityWeatherForecast`）
 - ✅ **地图与路线**: 魔搭 Hosted 高德 MCP（驾车/步行/POI/周边等）
@@ -44,6 +45,11 @@ Auto206Agent(因我们课题组实验室房间号是206，故得名) 是一个�
 | 7 | 上传文件（跨对话隔离）与多格式解析 | [07-upload-session-rag.png](docs/images/07-upload-session-rag.png) |
 | 8 | 多模态识别 | [08-multimodal.png](docs/images/08-multimodal.png) |
 | 9 | RAG 全局检索 | [09-rag-global.png](docs/images/09-rag-global.png) |
+| 10 | 飞书告警：添加自定义机器人 | [10-feishu-add-custom-bot.png](docs/images/10-feishu-add-custom-bot.png) |
+| 11 | 飞书告警：填写机器人信息 | [11-feishu-bot-profile.png](docs/images/11-feishu-bot-profile.png) |
+| 12 | 飞书告警：获取 Webhook 地址 | [12-feishu-webhook-url.png](docs/images/12-feishu-webhook-url.png) |
+| 13 | 飞书告警：群内消息展示 | [13-feishu-alert-in-group.png](docs/images/13-feishu-alert-in-group.png) |
+| 14 | 飞书告警：手机锁屏通知 | [14-feishu-mobile-notification.png](docs/images/14-feishu-mobile-notification.png) |
 
 ---
 
@@ -171,6 +177,72 @@ curl -X POST http://localhost:9900/api/upload \
 
 ---
 
+### 10. 飞书磁盘告警推送（206 服务器监控）
+
+应用在后台定时读取 Prometheus 根分区磁盘占用（与 [§4 206 监控面板](#4-206-服务器运维一键监控) 同源）。当 **磁盘使用率 ≥ 配置阈值**（默认 90%）时，通过飞书自定义机器人 Webhook 向群推送告警；**同主机成功推送后 24 小时内不重复发送**。无需单独安装 Alertmanager。
+
+#### 步骤 1：在飞书群中添加「自定义机器人」
+
+打开目标飞书群 → **设置** → **群机器人** → **添加机器人**，选择 **「自定义机器人」**（通过 Webhook 接收外部服务消息）。
+
+![飞书：选择自定义机器人](docs/images/10-feishu-add-custom-bot.png)
+
+#### 步骤 2：填写机器人名称与描述
+
+建议命名便于识别，例如「206课题组服务器报警 Robot」，描述中说明用途（监控组内服务器异常并推送到本群）。
+
+![飞书：配置机器人信息](docs/images/11-feishu-bot-profile.png)
+
+#### 步骤 3：复制 Webhook 地址并妥善保管
+
+创建完成后页面会展示 **Webhook 地址**，点击 **复制**。请勿将完整地址提交到 GitHub 或公开博客；若泄露请在飞书侧重置机器人。
+
+- **安全设置**（可选）：自定义关键词、IP 白名单、签名校验；启用签名校验时，将密钥填入 `application-local.yml` 的 `sign-secret`。
+- 点击 **完成** 结束飞书侧配置。
+
+![飞书：Webhook 地址](docs/images/12-feishu-webhook-url.png)
+
+#### 步骤 4：在 Auto206Agent 中启用告警
+
+1. 将 Webhook 写入项目根目录 **`application-local.yml`**（已 gitignore，见 `application-local.yml.example`）：
+
+```yaml
+server-monitor:
+  feishu-alert:
+    enabled: true
+    webhook-url: "https://open.feishu.cn/open-apis/bot/v2/hook/你的token"
+    sign-secret: ""                    # 若飞书启用了签名校验则填写
+    disk-threshold-percent: 90         # 根分区磁盘 ≥ 该值（%）时告警
+    check-interval-seconds: 300        # 巡检间隔（秒）
+    cooldown-hours: 24                 # 推送成功后冷却时间
+```
+
+2. 保证与 [§4](#4-206-服务器运维一键监控) 相同：**Prometheus 可达**（本机常用 SSH 隧道 `9090`）、`server-monitor.mock-enabled: false`。
+3. 启动或重启应用：`make init` 或 `mvn spring-boot:run`。日志中出现 `飞书磁盘告警已启用` 表示配置生效；应用就绪后会 **立即巡检一次**，之后按间隔周期巡检。
+
+#### 步骤 5：群内告警与手机通知
+
+当磁盘超过阈值且不在冷却期内时，机器人会在群内发送结构化告警（主机、当前磁盘%、查询时间、处置文档提示等）。成员在手机上可收到飞书 **锁屏/通知栏** 提醒（需开启飞书通知权限）。
+
+![飞书群内告警消息](docs/images/13-feishu-alert-in-group.png)
+
+![手机锁屏通知](docs/images/14-feishu-mobile-notification.png)
+
+**告警文案示例**（与实现一致）：
+
+- 标题：`【206服务器告警】根分区磁盘使用率过高`
+- 内容含：主机 IP、磁盘已用%、阈值、查询时间、`disk_high_usage.md` 提示、24h 内不重复推送说明
+
+**与面板/对话的关系**：
+
+| 能力 | 说明 |
+|------|------|
+| Web「206 监控」弹层 | 人工查看实时指标 |
+| 对话 `getLabServerRuntimeSnapshot` | 自然语言问「服务器怎么样」 |
+| **飞书告警** | 磁盘持续超阈值时 **主动推送**，无需打开网页 |
+
+---
+
 ## 📚 功能使用指南（配置与 API 细则）
 
 以下功能均可在 **Web 聊天框**（`http://localhost:9900`）用自然语言提问；Agent 会自动选择工具。请求体中的会话字段为 **`Id`**（与 `sessionId` / `id` 兼容），上传文件时建议传相同 `sessionId` 以保持「本会话私有文档」隔离。界面操作见上文 [功能演示与使用截图](#-功能演示与使用截图)。
@@ -206,7 +278,7 @@ curl -X POST http://localhost:9900/api/upload \
 
 ### 查询组内服务器状况
 
-有两种互补方式：**可视化监控面板** 与 **对话 + Agent 工具**。
+有三种互补方式：**可视化监控面板**、**对话 + Agent 工具**、**飞书自动告警**。
 
 #### 方式一：Web「206 监控」面板（推荐快速查看）
 
@@ -236,6 +308,10 @@ Agent 会调用 **`getLabServerRuntimeSnapshot`**（与上述接口同源），�
 二者不可混用：问「内存占用多少」应看快照；问「有哪些活跃告警」应查告警工具。
 
 相关说明文档：`aiops-docs/lab_server_snapshot_and_actions.md`。
+
+#### 方式三：飞书磁盘告警（主动推送）
+
+根分区磁盘 ≥ 阈值时自动推送到飞书群/手机，配置与分步截图见 **[§10 飞书磁盘告警推送](#10-飞书磁盘告警推送206-服务器监控)**。Webhook 仅写在 `application-local.yml`，勿提交仓库。
 
 ---
 
@@ -528,7 +604,15 @@ server-monitor:
   instance-regex: "<NODE_EXPORTER_INSTANCE>"   # 如 <LAB_SERVER_IP>:9100，与 Prometheus Targets 一致
   refresh-seconds: 10
   display-timezone: Asia/Shanghai
+  feishu-alert:
+    enabled: false             # 敏感项请写在 application-local.yml 并设为 true
+    webhook-url: ""
+    disk-threshold-percent: 90
+    check-interval-seconds: 300
+    cooldown-hours: 24
 ```
+
+飞书 Webhook 与 `enabled: true` 建议只放在 **`application-local.yml`**（参考 `application-local.yml.example`），见 [§10](#10-飞书磁盘告警推送206-服务器监控)。
 
 **占位符说明**（请替换为你实验室实际值，勿将真实内网 IP 提交到公开仓库）：
 
@@ -607,6 +691,7 @@ curl http://localhost:9900/api/server-monitor/snapshot
 |------|------|
 | 组内文档搜不到 | 确认 Milvus 已启动；`make upload` 或 `knowledge.bootstrap-index-on-startup` |
 | 206 监控无数据 | 检查 Prometheus / `instance-regex`；或临时 `server-monitor.mock-enabled: true` |
+| 飞书未收到告警 | 确认 `application-local.yml` 中 `feishu-alert.enabled` 与 `webhook-url`；日志是否有「飞书磁盘告警已启用/已推送」；磁盘是否 ≥ 阈值；是否在 24h 冷却内；Prometheus 隧道是否连通 |
 | 天气正常、路线失败 | 配置 `amap-maps` 的 MCP `sse-endpoint` |
 | AIOps 报告无日志证据 | 当前多为 `cls.mock-enabled` 演示数据；需接入 CLS MCP |
 | 上传文件其他会话也能看到 | 上传时是否传了 `sessionId`；`knowledge.session-scoped-uploads` 是否为 true |

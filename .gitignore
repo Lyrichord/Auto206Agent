@@ -58,6 +58,7 @@ data/chat-memory/
 uploads/
 # 会话隔离 RAG 副本（带 sessionId 的上传向量化路径）
 data/rag-session-store/
+data/alert-state/
 
 ### Temp Scripts ###
 *.sh

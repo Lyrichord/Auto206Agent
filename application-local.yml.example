@@ -20,3 +20,11 @@ dashscope:
 
 research-feed:
   github-token: ""
+
+# 206 飞书磁盘告警（复制到 application-local.yml 后填写真实 Webhook）
+server-monitor:
+  feishu-alert:
+    enabled: true
+    webhook-url: "https://open.feishu.cn/open-apis/bot/v2/hook/your-token"
+    sign-secret: ""
+    disk-threshold-percent: 90
