@@ -13,7 +13,7 @@ Auto206Agent(因我们课题组实验室房间号是206，故得名) 是一个�
 基于 AI Agent 的自动化运维系统，采用 **Planner → Executor → Replanner** 多 Agent 协作，实现告警分析、日志查询、智能诊断和《告警分析报告》生成。
 
 ### 3. 扩展能力（对话内自然语言触发）
-除知识库问答外，主对话 Agent 还可按需调用：**组内服务器实时指标**、**Prometheus 告警**、**天气（Open-Meteo）**、**路线/POI（高德 MCP）**、**腾讯云日志（CLS MCP）** 等工具；Web 侧栏另提供 **206 监控面板**、**飞书磁盘告警推送** 与 **自动驾驶文献聚合**。
+除知识库问答外，主对话 Agent 还可按需调用：**组内服务器实时指标**、**Prometheus 告警**、**天气（Open-Meteo）**、**路线/POI（高德 MCP）**、**腾讯云日志（CLS MCP）** 等工具；Web 侧栏另提供 **206 监控面板**、**飞书服务器监控告警** 与 **自动驾驶文献聚合**。
 
 界面与典型用法见 **[功能演示与使用截图](#-功能演示与使用截图)**（含 14 张示意图）。
 
@@ -22,7 +22,7 @@ Auto206Agent(因我们课题组实验室房间号是206，故得名) 是一个�
 - ✅ **RAG 问答**: 混合检索 + Rerank + 多轮对话 + SSE 流式输出
 - ✅ **组内知识库**: `aiops-docs`（成员、论文、项目、运维处置）+ 会话内上传隔离
 - ✅ **206 服务器监控**: Prometheus 即时快照（CPU/内存/负载/磁盘/网络）
-- ✅ **飞书告警推送**: 根分区磁盘 ≥ 阈值自动推送到飞书群/手机（24h 冷却，Webhook 配在本地配置）
+- ✅ **飞书告警推送**: 磁盘/内存超阈值、Prometheus 不可达时自动推送到飞书群/手机（**10 分钟**冷却，Webhook 配在本地配置）
 - ✅ **AIOps 运维**: 多 Agent 协作 + 告警/日志/文档联动 + 自动报告
 - ✅ **天气查询**: Open-Meteo（免 Key，工具 `getCityWeatherForecast`）
 - ✅ **地图与路线**: 魔搭 Hosted 高德 MCP（驾车/步行/POI/周边等）
@@ -177,9 +177,19 @@ curl -X POST http://localhost:9900/api/upload \
 
 ---
 
-### 10. 飞书磁盘告警推送（206 服务器监控）
+### 10. 飞书服务器监控告警推送（206 服务器监控）
 
-应用在后台定时读取 Prometheus 根分区磁盘占用（与 [§4 206 监控面板](#4-206-服务器运维一键监控) 同源）。当 **磁盘使用率 ≥ 配置阈值**（默认 90%）时，通过飞书自定义机器人 Webhook 向群推送告警；**同主机成功推送后 24 小时内不重复发送**。无需单独安装 Alertmanager。
+应用在后台定时拉取 Prometheus 指标（与 [§4 206 监控面板](#4-206-服务器运维一键监控) 同源），通过飞书自定义机器人 Webhook 向群推送告警；**同一告警类型成功推送后 10 分钟内不重复发送**。无需单独安装 Alertmanager。
+
+**告警触发条件（默认）**
+
+| 类型 | 条件 | 说明 |
+|------|------|------|
+| 磁盘 | 根分区使用率 **≥ 90%** | 对应 `diskRootPercent` |
+| 内存 | 内存使用率 **≥ 50%** | 对应 `memoryPercent` |
+| 监控链路 | **Prometheus / 网络不可达** | 隧道断开、9090 无响应或连续拉取失败时推送「监控断开」类告警 |
+
+> 处置步骤仍可结合 `disk_high_usage.md`、`memory_high_usage.md` 等运维文档；对话内也可用 `getLabServerRuntimeSnapshot` 查看即时数值。
 
 #### 步骤 1：在飞书群中添加「自定义机器人」
 
@@ -213,8 +223,10 @@ server-monitor:
     webhook-url: "https://open.feishu.cn/open-apis/bot/v2/hook/你的token"
     sign-secret: ""                    # 若飞书启用了签名校验则填写
     disk-threshold-percent: 90         # 根分区磁盘 ≥ 该值（%）时告警
+    memory-threshold-percent: 50       # 内存使用率 ≥ 该值（%）时告警
+    network-disconnect-alert: true     # Prometheus 不可达时告警
     check-interval-seconds: 300        # 巡检间隔（秒）
-    cooldown-hours: 24                 # 推送成功后冷却时间
+    cooldown-minutes: 10               # 同类型告警推送成功后冷却时间（分钟）
 ```
 
 2. 保证与 [§4](#4-206-服务器运维一键监控) 相同：**Prometheus 可达**（本机常用 SSH 隧道 `9090`）、`server-monitor.mock-enabled: false`。
@@ -222,16 +234,21 @@ server-monitor:
 
 #### 步骤 5：群内告警与手机通知
 
-当磁盘超过阈值且不在冷却期内时，机器人会在群内发送结构化告警（主机、当前磁盘%、查询时间、处置文档提示等）。成员在手机上可收到飞书 **锁屏/通知栏** 提醒（需开启飞书通知权限）。
+当满足上表任一条件且不在 **10 分钟**冷却期内时，机器人会在群内发送结构化告警（主机、指标数值、查询时间、处置文档提示等）。成员在手机上可收到飞书 **锁屏/通知栏** 提醒（需开启飞书通知权限）。
 
 ![飞书群内告警消息](docs/images/13-feishu-alert-in-group.png)
 
 ![手机锁屏通知](docs/images/14-feishu-mobile-notification.png)
 
-**告警文案示例**（与实现一致）：
+**告警文案示例**：
 
-- 标题：`【206服务器告警】根分区磁盘使用率过高`
-- 内容含：主机 IP、磁盘已用%、阈值、查询时间、`disk_high_usage.md` 提示、24h 内不重复推送说明
+| 场景 | 标题示例 |
+|------|----------|
+| 磁盘 | `【206服务器告警】根分区磁盘使用率过高` |
+| 内存 | `【206服务器告警】内存使用率过高` |
+| 监控断开 | `【206服务器告警】Prometheus 监控不可达（网络/隧道断开）` |
+
+正文均含：主机 IP、当前指标、阈值、查询时间、相关运维文档提示，以及 **10 分钟内不重复推送** 说明。
 
 **与面板/对话的关系**：
 
@@ -239,7 +256,7 @@ server-monitor:
 |------|------|
 | Web「206 监控」弹层 | 人工查看实时指标 |
 | 对话 `getLabServerRuntimeSnapshot` | 自然语言问「服务器怎么样」 |
-| **飞书告警** | 磁盘持续超阈值时 **主动推送**，无需打开网页 |
+| **飞书告警** | 磁盘/内存超阈值或监控不可达时 **主动推送**，无需打开网页 |
 
 ---
 
@@ -309,9 +326,9 @@ Agent 会调用 **`getLabServerRuntimeSnapshot`**（与上述接口同源），�
 
 相关说明文档：`aiops-docs/lab_server_snapshot_and_actions.md`。
 
-#### 方式三：飞书磁盘告警（主动推送）
+#### 方式三：飞书监控告警（主动推送）
 
-根分区磁盘 ≥ 阈值时自动推送到飞书群/手机，配置与分步截图见 **[§10 飞书磁盘告警推送](#10-飞书磁盘告警推送206-服务器监控)**。Webhook 仅写在 `application-local.yml`，勿提交仓库。
+磁盘 **≥90%**、内存 **≥50%**，或 **Prometheus/网络不可达** 时自动推送到飞书群/手机；同类型告警 **10 分钟**冷却。配置与分步截图见 **[§10 飞书服务器监控告警推送](#10-飞书服务器监控告警推送206-服务器监控)**。Webhook 仅写在 `application-local.yml`，勿提交仓库。
 
 ---
 
@@ -608,11 +625,13 @@ server-monitor:
     enabled: false             # 敏感项请写在 application-local.yml 并设为 true
     webhook-url: ""
     disk-threshold-percent: 90
+    memory-threshold-percent: 50
+    network-disconnect-alert: true
     check-interval-seconds: 300
-    cooldown-hours: 24
+    cooldown-minutes: 10       # 同类型告警冷却（分钟）
 ```
 
-飞书 Webhook 与 `enabled: true` 建议只放在 **`application-local.yml`**（参考 `application-local.yml.example`），见 [§10](#10-飞书磁盘告警推送206-服务器监控)。
+飞书 Webhook 与 `enabled: true` 建议只放在 **`application-local.yml`**（参考 `application-local.yml.example`），见 [§10](#10-飞书服务器监控告警推送206-服务器监控)。
 
 **占位符说明**（请替换为你实验室实际值，勿将真实内网 IP 提交到公开仓库）：
 
@@ -691,7 +710,7 @@ curl http://localhost:9900/api/server-monitor/snapshot
 |------|------|
 | 组内文档搜不到 | 确认 Milvus 已启动；`make upload` 或 `knowledge.bootstrap-index-on-startup` |
 | 206 监控无数据 | 检查 Prometheus / `instance-regex`；或临时 `server-monitor.mock-enabled: true` |
-| 飞书未收到告警 | 确认 `application-local.yml` 中 `feishu-alert.enabled` 与 `webhook-url`；日志是否有「飞书磁盘告警已启用/已推送」；磁盘是否 ≥ 阈值；是否在 24h 冷却内；Prometheus 隧道是否连通 |
+| 飞书未收到告警 | 确认 `application-local.yml` 中 `feishu-alert.enabled` 与 `webhook-url`；日志是否有「飞书磁盘告警已启用/已推送」；是否满足磁盘/内存阈值或监控断开条件；是否在 **10 分钟**冷却内；Prometheus 隧道是否连通 |
 | 天气正常、路线失败 | 配置 `amap-maps` 的 MCP `sse-endpoint` |
 | AIOps 报告无日志证据 | 当前多为 `cls.mock-enabled` 演示数据；需接入 CLS MCP |
 | 上传文件其他会话也能看到 | 上传时是否传了 `sessionId`；`knowledge.session-scoped-uploads` 是否为 true |
